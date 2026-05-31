@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>500H — ML Study Timer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23080c10'/><text x='50%25' y='50%25' dominant-baseline='central' text-anchor='middle' font-family='monospace' font-weight='700' font-size='14' fill='%2300d4aa'>5H</text></svg>"/>
+<style>
+  :root {
+    --bg: #080c10;
+    --surface: #0f1419;
+    --surface2: #161d26;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --text: #e8edf2;
+    --muted: #5a6a7a;
+    --accent: #00d4aa;
+    --accent2: #0099ff;
+    --gold: #f5a623;
+    --danger: #ff4757;
+    --glow: rgba(0,212,170,0.15);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+    cursor: default;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Radial glow */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 700px;
+    height: 500px;
+    background: radial-gradient(ellipse, rgba(0,212,170,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 700px;
+    padding: 3rem 2rem 4rem;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 3.5rem;
+  }
+
+  .brand {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .brand-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 52px;
+    letter-spacing: 3px;
+    line-height: 1;
+    color: var(--text);
+  }
+
+  .brand-title span {
+    color: var(--accent);
+  }
+
+  .brand-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.2em;
+    margin-top: 4px;
+  }
+
+  .header-right {
+    text-align: right;
+  }
+
+  .session-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+
+  .session-badge .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+  }
+
+  .session-badge.live .dot {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: blink 1.4s ease-in-out infinite;
+  }
+
+  .session-badge.live {
+    border-color: rgba(0,212,170,0.3);
+    color: var(--accent);
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Main timer */
+  .timer-section {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 3rem;
+    align-items: center;
+    margin-bottom: 3rem;
+  }
+
+  .ring-container {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    flex-shrink: 0;
+  }
+
+  .ring-container svg {
+    transform: rotate(-90deg);
+    filter: drop-shadow(0 0 20px rgba(0,212,170,0.2));
+  }
+
+  .ring-track {
+    fill: none;
+    stroke: rgba(255,255,255,0.05);
+    stroke-width: 3;
+  }
+
+  .ring-progress {
+    fill: none;
+    stroke: url(#ringGrad);
+    stroke-width: 3;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .ring-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .ring-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 28px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+
+  .ring-label {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    margin-top: 6px;
+    text-transform: uppercase;
+  }
+
+  .ring-pct {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    color: var(--accent);
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+
+  /* Right side stats */
+  .timer-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .big-stat {
+    border-left: 2px solid var(--accent);
+    padding-left: 1.25rem;
+  }
+
+  .big-stat-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    letter-spacing: 2px;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .big-stat-label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-top: 3px;
+  }
+
+  .mini-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .mini-stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+
+  .mini-stat-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .mini-stat-label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* Progress bar */
+  .progress-section {
+    margin-bottom: 2.5rem;
+  }
+
+  .progress-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .progress-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .progress-nums {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .progress-nums span {
+    color: var(--accent);
+  }
+
+  .progress-track {
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 1s cubic-bezier(0.4,0,0.2,1);
+    position: relative;
+  }
+
+  .progress-fill::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent2);
+    box-shadow: 0 0 10px var(--accent2);
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 3rem;
+  }
+
+  .btn-primary {
+    flex: 1;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 16px 28px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0);
+    transition: background 0.2s;
+  }
+
+  .btn-primary:hover::before { background: rgba(255,255,255,0.1); }
+  .btn-primary:active { transform: scale(0.98); }
+
+  .btn-primary.paused {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border2);
+  }
+
+  .btn-primary.paused:hover { background: var(--surface2); }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 16px 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--border2);
+    color: var(--text);
+    background: var(--surface);
+  }
+
+  /* Milestones */
+  .milestones-section {}
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  .section-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .next-milestone {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+  }
+
+  .milestone-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 8px;
+  }
+
+  .m-node {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.4s ease;
+    cursor: default;
+  }
+
+  .m-node:hover { border-color: var(--border2); }
+
+  .m-node.done {
+    background: rgba(0,212,170,0.08);
+    border-color: rgba(0,212,170,0.3);
+  }
+
+  .m-node.done::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(0,212,170,0.15), transparent 70%);
+  }
+
+  .m-node.current {
+    border-color: rgba(0,153,255,0.4);
+    background: rgba(0,153,255,0.05);
+    animation: pulse-border 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-border {
+    0%, 100% { border-color: rgba(0,153,255,0.4); }
+    50% { border-color: rgba(0,153,255,0.15); }
+  }
+
+  .m-node .m-h {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--muted);
+    position: relative;
+    z-index: 1;
+  }
+
+  .m-node.done .m-h { color: var(--accent); }
+
+  .m-node .m-check {
+    font-size: 14px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .m-node .m-pct {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: rgba(0,153,255,0.7);
+    margin-top: 2px;
+  }
+
+  /* Tooltip */
+  .m-node .m-tip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--text);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 10;
+  }
+
+  .m-node:hover .m-tip { opacity: 1; }
+
+  /* Celebration overlay */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s;
+    backdrop-filter: blur(6px);
+  }
+
+  .overlay.show {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .celebrate-box {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 20px;
+    padding: 3rem 2.5rem;
+    text-align: center;
+    max-width: 380px;
+    width: 90%;
+    transform: scale(0.8) translateY(30px);
+    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .celebrate-box::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--gold));
+  }
+
+  .overlay.show .celebrate-box {
+    transform: scale(1) translateY(0);
+  }
+
+  .celeb-milestone {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+
+  .celeb-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 80px;
+    line-height: 1;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: 3px;
+  }
+
+  .celeb-unit {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    margin-bottom: 1.5rem;
+  }
+
+  .celeb-msg {
+    font-size: 15px;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 2rem;
+    padding: 0 1rem;
+  }
+
+  .celeb-msg strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .celeb-close {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 14px 32px;
+    cursor: pointer;
+    width: 100%;
+    letter-spacing: 0.05em;
+    transition: opacity 0.2s;
+  }
+
+  .celeb-close:hover { opacity: 0.85; }
+
+  /* Confetti */
+  .confetti {
+    position: fixed;
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .music-section {
+    margin-top: 2.5rem;
+  }
+
+  .music-player {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+  }
+
+  .music-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .music-btn:hover { background: var(--surface2); }
+
+  .music-btn.playing {
+    border-color: rgba(0,212,170,0.4);
+    color: var(--accent);
+  }
+
+  .music-vol {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+  }
+
+  .vol-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 3px;
+    background: var(--surface2);
+    border-radius: 999px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .vol-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+
+  .music-status {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 3rem;
+    text-align: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: rgba(90,106,122,0.5);
+    letter-spacing: 0.1em;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="header">
+    <div class="brand">
+      <div class="brand-title">500<span>H</span></div>
+      <div class="brand-sub">Machine Learning · Study Tracker</div>
+    </div>
+    <div class="header-right">
+      <div class="session-badge" id="sessionBadge">
+        <div class="dot"></div>
+        <span id="sessionText">0 sessions</span>
+      </div>
+    </div>
+  </header>
+
+  <section class="timer-section">
+    <div class="ring-container">
+      <svg width="200" height="200" viewBox="0 0 200 200">
+        <defs>
+          <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#00d4aa"/>
+            <stop offset="100%" stop-color="#0099ff"/>
+          </linearGradient>
+        </defs>
+        <circle class="ring-track" cx="100" cy="100" r="88"/>
+        <circle class="ring-progress" id="ringProgress" cx="100" cy="100" r="88"
+          stroke-dasharray="552.9"
+          stroke-dashoffset="552.9"/>
+      </svg>
+      <div class="ring-center">
+        <div class="ring-time" id="ringTime">0:00:00</div>
+        <div class="ring-label">elapsed</div>
+        <div class="ring-pct" id="ringPct">0.0%</div>
+      </div>
+    </div>
+
+    <div class="timer-info">
+      <div class="big-stat">
+        <div class="big-stat-val" id="bigRemain">500</div>
+        <div class="big-stat-label">Hours Remaining</div>
+      </div>
+      <div class="mini-stats">
+        <div class="mini-stat">
+          <div class="mini-stat-val" id="miniElapsed">0h 0m</div>
+          <div class="mini-stat-label">Total Study</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-val" id="miniNext">50h</div>
+          <div class="mini-stat-label">Next Milestone</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="progress-section">
+    <div class="progress-meta">
+      <div class="progress-label">Overall Progress</div>
+      <div class="progress-nums"><span id="pctNum">0.0</span>% of 500h</div>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill" style="width:0%"></div>
+    </div>
+  </section>
+
+  <div class="controls">
+    <button class="btn-primary" id="mainBtn" onclick="toggleTimer()">
+      <svg id="btnIcon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      <span id="btnLabel">Start Studying</span>
+    </button>
+    <button class="btn-secondary" onclick="confirmReset()">Reset</button>
+  </div>
+
+  <section class="milestones-section">
+    <div class="section-header">
+      <div class="section-title">Milestones · Every 50 Hours</div>
+      <div class="next-milestone" id="nextMilestoneTxt"></div>
+    </div>
+    <div class="milestone-grid" id="milestoneGrid"></div>
+  </section>
+
+  <div class="music-section">
+    <div class="section-header" style="margin-bottom:1rem;">
+      <div class="section-title">Study Music</div>
+      <div class="music-status" id="musicStatus">—</div>
+    </div>
+    <div class="music-player">
+      <audio id="audioPlayer" src="music.mp3" loop preload="none"></audio>
+      <button class="music-btn" id="musicBtn" onclick="toggleMusic()">
+        <svg id="musicIcon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        <span id="musicLabel">Play Music</span>
+      </button>
+      <div class="music-vol">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color:var(--muted);flex-shrink:0"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+        <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.7" oninput="setVol(this.value)" class="vol-slider"/>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Progress saved locally · Open this file in Chrome anytime
+  </div>
+
+</div>
+
+<!-- Celebration overlay -->
+<div class="overlay" id="overlay">
+  <div class="celebrate-box">
+    <div class="celeb-milestone">Milestone Reached</div>
+    <div class="celeb-num" id="celebNum">50</div>
+    <div class="celeb-unit">HOURS</div>
+    <div class="celeb-msg" id="celebMsg">You've crossed a major milestone.</div>
+    <button class="celeb-close" onclick="closeOverlay()">Keep Going →</button>
+  </div>
+</div>
+
+<script>
+const TOTAL_SECS = 500 * 3600;
+const STEP = 50 * 3600;
+const MILESTONES = Array.from({length:10},(_,i)=>(i+1)*STEP);
+const KEY = 'ml500h_v3';
+
+const MSGS = [
+  "You've logged <strong>50 hours</strong>. The foundations are solidifying. Loss functions, gradients — these make sense now.",
+  "<strong>100 hours in.</strong> A full century of machine learning. You understand what confused you at the start.",
+  "<strong>150 hours.</strong> You're past the beginner fog. Linear algebra, backprop — you're fluent.",
+  "<strong>200 hours.</strong> A fifth of the journey, complete. Neural networks are no longer magic to you.",
+  "<strong>250 hours.</strong> Halfway there. You are no longer a beginner. The hard part is behind you.",
+  "<strong>300 hours</strong> of focused machine learning. Most people who start never reach this point.",
+  "<strong>350 hours.</strong> You're in expert territory now. CNNs, transformers, fine-tuning — you've seen it all.",
+  "<strong>400 hours.</strong> The summit is visible. Your understanding is deep and real.",
+  "<strong>450 hours.</strong> Fifty more to go. This is the final stretch.",
+  "<strong>500 hours.</strong> You did it. Five hundred hours of machine learning. You are a practitioner now."
+];
+
+let state = {
+  total: 0,
+  running: false,
+  sessions: 0,
+  lastStart: null,
+  celebrated: []
+};
+
+let ticker = null;
+let lastMilestoneShown = -1;
+
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY)||'null');
+    if (d) {
+      state = {...state, ...d};
+      if (state.running && state.lastStart) {
+        state.total += Math.floor((Date.now() - state.lastStart)/1000);
+        state.lastStart = Date.now();
+      } else {
+        state.running = false;
+        state.lastStart = null;
+      }
+    }
+  } catch(e) {}
+}
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e) {}
+}
+
+function fmt(s) {
+  const h = Math.floor(s/3600);
+  const m = Math.floor((s%3600)/60);
+  const sec = s%60;
+  return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+function liveSeconds() {
+  if (!state.running || !state.lastStart) return state.total;
+  return state.total + Math.floor((Date.now()-state.lastStart)/1000);
+}
+
+function render(s) {
+  const pct = Math.min(s/TOTAL_SECS,1);
+  const circ = 2*Math.PI*88;
+
+  document.getElementById('ringTime').textContent = fmt(s);
+  document.getElementById('ringPct').textContent = (pct*100).toFixed(1)+'%';
+  document.getElementById('ringProgress').style.strokeDashoffset = circ*(1-pct);
+
+  document.getElementById('progressFill').style.width = (pct*100).toFixed(3)+'%';
+  document.getElementById('pctNum').textContent = (pct*100).toFixed(1);
+
+  const remH = Math.max(0, Math.ceil((TOTAL_SECS-s)/3600));
+  document.getElementById('bigRemain').textContent = remH;
+
+  const elH = Math.floor(s/3600);
+  const elM = Math.floor((s%3600)/60);
+  document.getElementById('miniElapsed').textContent = `${elH}h ${elM}m`;
+
+  const nextMs = MILESTONES.find(m=>s<m);
+  if (nextMs) {
+    const hoursLeft = Math.ceil((nextMs-s)/3600);
+    document.getElementById('miniNext').textContent = `${nextMs/3600}h`;
+    document.getElementById('nextMilestoneTxt').textContent = `${hoursLeft}h to go`;
+  } else {
+    document.getElementById('miniNext').textContent = '✓ All done';
+    document.getElementById('nextMilestoneTxt').textContent = 'Completed!';
+  }
+
+  const badge = document.getElementById('sessionBadge');
+  const txt = document.getElementById('sessionText');
+  txt.textContent = `${state.sessions} session${state.sessions!==1?'s':''}`;
+  if (state.running) {
+    badge.classList.add('live');
+    txt.textContent = 'Live';
+  } else {
+    badge.classList.remove('live');
+    txt.textContent = `${state.sessions} session${state.sessions!==1?'s':''}`;
+  }
+
+  const btn = document.getElementById('mainBtn');
+  const icon = document.getElementById('btnIcon');
+  const label = document.getElementById('btnLabel');
+  if (state.running) {
+    btn.classList.add('paused');
+    icon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+    label.textContent = 'Pause';
+  } else {
+    btn.classList.remove('paused');
+    icon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+    label.textContent = s > 0 ? 'Resume' : 'Start Studying';
+  }
+
+  renderMilestones(s);
+  checkMilestone(s);
+}
+
+function renderMilestones(s) {
+  const grid = document.getElementById('milestoneGrid');
+  grid.innerHTML = '';
+  MILESTONES.forEach((ms,i) => {
+    const h = (i+1)*50;
+    const done = s >= ms;
+    const current = !done && s > (i>0?MILESTONES[i-1]:0);
+    const el = document.createElement('div');
+    el.className = 'm-node' + (done?' done':'') + (current?' current':'');
+    if (done) {
+      el.innerHTML = `<div class="m-h">${h}h</div><div class="m-check">✓</div>
+        <div class="m-tip">${h}h — unlocked</div>`;
+    } else {
+      const pct = Math.floor((s/ms)*100);
+      el.innerHTML = `<div class="m-h">${h}h</div>
+        ${current?`<div class="m-pct">${pct}%</div>`:''}
+        <div class="m-tip">${h}h — ${pct}%</div>`;
+    }
+    grid.appendChild(el);
+  });
+}
+
+function checkMilestone(s) {
+  for (let i=0; i<MILESTONES.length; i++) {
+    if (s >= MILESTONES[i] && !state.celebrated.includes(i) && lastMilestoneShown !== i) {
+      lastMilestoneShown = i;
+      state.celebrated.push(i);
+      save();
+      showCelebration(i);
+      break;
+    }
+  }
+}
+
+function showCelebration(idx) {
+  const h = (idx+1)*50;
+  document.getElementById('celebNum').textContent = h;
+  document.getElementById('celebMsg').innerHTML = MSGS[idx];
+  document.getElementById('overlay').classList.add('show');
+  confetti();
+}
+
+function closeOverlay() {
+  document.getElementById('overlay').classList.remove('show');
+}
+
+function confetti() {
+  const colors = ['#00d4aa','#0099ff','#f5a623','#ff6b9d','#a855f7','#ffffff'];
+  for (let i=0;i<80;i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti';
+    const size = 4+Math.random()*10;
+    el.style.cssText = `
+      left:${Math.random()*100}vw; top:-20px;
+      width:${size}px; height:${size}px;
+      background:${colors[Math.floor(Math.random()*colors.length)]};
+      border-radius:${Math.random()>0.5?'50%':'2px'};
+      opacity:1;
+    `;
+    document.body.appendChild(el);
+    const x = (Math.random()-0.5)*400;
+    const dur = 1800+Math.random()*1500;
+    const delay = Math.random()*600;
+    el.animate([
+      {top:'-20px', transform:`translateX(0) rotate(0deg)`, opacity:1},
+      {top:'60vh', transform:`translateX(${x}px) rotate(${Math.random()*720}deg)`, opacity:0.7},
+      {top:'105vh', transform:`translateX(${x*1.3}px) rotate(${Math.random()*1080}deg)`, opacity:0}
+    ],{duration:dur, delay, fill:'forwards'}).finished.then(()=>el.remove());
+  }
+}
+
+function toggleTimer() {
+  if (state.running) {
+    state.total += Math.floor((Date.now()-state.lastStart)/1000);
+    state.running = false;
+    state.lastStart = null;
+    clearInterval(ticker);
+    ticker = null;
+  } else {
+    state.running = true;
+    state.lastStart = Date.now();
+    state.sessions++;
+    ticker = setInterval(()=>render(liveSeconds()),1000);
+  }
+  save();
+  render(liveSeconds());
+}
+
+function confirmReset() {
+  if (confirm('Reset all 500h progress? This cannot be undone.')) {
+    clearInterval(ticker); ticker=null;
+    state = {total:0,running:false,sessions:0,lastStart:null,celebrated:[]};
+    lastMilestoneShown = -1;
+    save();
+    render(0);
+  }
+}
+
+function toggleMusic() {
+  const audio = document.getElementById('audioPlayer');
+  const btn = document.getElementById('musicBtn');
+  const icon = document.getElementById('musicIcon');
+  const label = document.getElementById('musicLabel');
+  const status = document.getElementById('musicStatus');
+
+  if (audio.paused) {
+    audio.play().then(() => {
+      btn.classList.add('playing');
+      icon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+      label.textContent = 'Pause Music';
+      status.textContent = '♪ playing';
+      status.style.color = 'var(--accent)';
+    }).catch(() => {
+      status.textContent = 'file not found';
+      status.style.color = 'var(--danger)';
+    });
+  } else {
+    audio.pause();
+    btn.classList.remove('playing');
+    icon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+    label.textContent = 'Play Music';
+    status.textContent = '— paused';
+    status.style.color = 'var(--muted)';
+  }
+}
+
+function setVol(v) {
+  document.getElementById('audioPlayer').volume = v;
+}
+
+load();
+render(liveSeconds());
+if (state.running) {
+  ticker = setInterval(()=>render(liveSeconds()), 1000);
+}
+</script>
+</body>
+</html>
